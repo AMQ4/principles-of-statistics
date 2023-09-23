@@ -1,229 +1,124 @@
-import json
-from collections import Counter
-from math import ceil
-from bisect import bisect
+import collections
+from enum import Enum
+from abc import ABC, abstractmethod
 
 
-def intfrequency_table(iterable: list[int]):
+class SortType(Enum):
+    BY_FREQ = 0
+    BY_ITEM = 1
+
+
+def unique_copy(input_list):
     """
-    Computes the frequency table for integer values in the given iterable.
+    Returns a list containing the unique elements from the input_list while preserving the original order.
 
     Args:
-        iterable (iterable of int): The input iterable containing integer values.
+        input_list (list): The input list containing elements to be filtered for uniqueness.
 
     Returns:
-        tuple: A tuple containing two elements. The first element is a set of unique
-               integers in the iterable, and the second element is a list of non-zero
-               frequencies corresponding to each unique integer.
+        list: A new list containing unique elements in the same order as they appear in the input_list.
 
-    Raises:
-        ValueError: If the input iterable is empty or contains non-integer values.
+    Example:
+        >>> input_list = [1, 2, 5, 2, 4, 4, 3, 5]
+        >>> unique_elements = unique_copy(input_list)
+        >>> print(unique_elements)
+        [1, 2, 5, 4, 3]
+
     """
-    if not iterable:
-        raise ValueError("Input iterable is empty")
+    unique_elements = []
+    seen_elements = set()
 
-    if not all(isinstance(item, int) for item in iterable):
-        raise ValueError("Input iterable must contain only integer values")
+    for item in input_list:
+        if item not in seen_elements:
+            unique_elements.append(item)
+            seen_elements.add(item)
 
-    min_val, max_val = min(iterable), max(iterable)
-    freq = [0] * (max_val - min_val + 1)
-
-    for item in iterable:
-        freq[item - min_val] += 1
-
-    non_zero_freq = [f for f in freq if f > 0]
-    table = dict(zip(set(iterable), non_zero_freq))
-    table["freqsum"] = sum(non_zero_freq)
-    return table
+    return unique_elements
 
 
-def frequency_table(iterable: list):
-    """
-    Computes the frequency table for items in the given iterable.
+class FrequencyTable(ABC):
+    def __init__(self, data):
+        self._data = data
+        self._table = self._calculate_frequencies()
+        self._frequencies = list(self._table.values())
 
-    Args:
-        iterable: The input iterable.
+    @abstractmethod
+    def _calculate_frequencies(self):
+        pass
 
-    Returns:
-        list: A list of tuples, where each tuple contains an item from the iterable
-              and its corresponding frequency in the iterable.
+    @abstractmethod
+    def display_table(self):
+        pass
 
-    Raises:
-        ValueError: If the input iterable is empty.
-    """
-    if not iterable:
-        raise ValueError("Input iterable is empty")
+    def to_dict(self):
+        return self._table.copy()
 
-    counter = Counter(iterable)
-    table = dict(counter.items())
-    table["freqsum"] = sum(counter.values())
-    return table
+    def get_data(self):
+        return self._data.copy()
 
+    def get_frequencies(self):
+        return self._frequencies.copy()
 
-def class_frequency_table(iterable, num_classes=None, cut_points=None):
-    """
-    Computes a class frequency table for numeric values in the given iterable.
+    def get_total(self):
+        return sum(self._frequencies)
 
-    Args:
-        iterable: The input iterable containing numeric values.
-        num_classes (int, optional): The number of classes to divide the data into.
-        cut_points (list of float, optional): List of cut points for defining custom
-            class intervals.
+    def sort(self, by=SortType.BY_FREQ, acs=True):
+        try:
+            if not isinstance(by, SortType):
+                raise ValueError("Invalid SortType selected. by must be either a SortType.BY_FREQ or SortType.BY_ITEM.")
+        except ValueError as e:
+            print(e)
+        else:
+            self._table = dict(sorted(self._table.items(), key=lambda item: item[by.value], reverse=not acs))
 
-    Returns:
-        dict: A dictionary where keys are class intervals (as ranges) and values
-              are dictionaries containing the 'freq' (frequency) of values within
-              each class interval. The table also includes a 'freqsum' representing
-              the total frequency of all values.
-
-    Raises:
-        ValueError: If the input iterable is empty or invalid cut_points are provided.
-    """
-    assert num_classes is None or cut_points is None
-
-    if not iterable:
-        raise ValueError("Input iterable is empty")
-
-    if cut_points is not None and (len(cut_points) < 2 or cut_points != sorted(cut_points)):
-        raise ValueError("Invalid cut_points. It must be a list of at least two sorted values.")
-
-    for item in iterable:
-        if not isinstance(item, int) and not isinstance(item, float):
-            raise ValueError("Input iterable is must to be a number.")
-
-    if num_classes is None:
-        num_classes = ceil(len(iterable) ** 0.5)
-
-    min_val, max_val = min(iterable), max(iterable)
-    range_size = ceil((max_val - min_val) / num_classes)
-
-    table = {}
-
-    if cut_points is None:
-        for i in range(1, num_classes + 1):
-            lower_bound = min_val + (i - 1) * range_size
-            table[range(lower_bound, lower_bound + range_size)] = {}
-    else:
-        if min_val < cut_points[0]:
-            cut_points.insert(0, min_val)
-        if max_val > cut_points[-1]:
-            cut_points.append(max_val)
-
-        cut_points[-1] += 1
-
-        for i in range(len(cut_points) - 1):
-            table[range(cut_points[i], cut_points[i + 1])] = {}
-
-    counter = Counter(iterable)
-    items = sorted(counter.items())
-
-    keys = sorted(counter.keys())
-
-    cumulative_sums = [items[0][1]]
-
-    for _, freq in items[1:]:
-        cumulative_sums.append(cumulative_sums[-1] + freq)
-
-    temp = 0
-    fsum = 0
-
-    for class_range in table:
-        cs_for_current_class = cumulative_sums[bisect(keys, class_range.stop - 1) - 1]
-        table[class_range]["freq"] = cs_for_current_class - temp
-        fsum += cs_for_current_class - temp
-        temp = cs_for_current_class
-
-    table['freqsum'] = fsum
-    return table
+    def __len__(self):
+        return len(self._data)
 
 
-def relative_frequency_table(iterable, num_classes=None, cut_points=None):
-    """
-    Computes a relative frequency table for numeric values in the given iterable.
+class DiscreteFrequencyTable(FrequencyTable):
+    def __init__(self, data):
+        super().__init__(data)
 
-    Args:
-        iterable: The input iterable containing numeric values.
-        num_classes (int, optional): The number of classes to divide the data into.
-        cut_points (list of float, optional): List of cut points for defining custom
-            class intervals.
+    def _calculate_frequencies(self):
+        counter = collections.Counter(self._data)
+        return dict(counter.items())
 
-    Returns:
-        dict: A dictionary where keys are class intervals (as ranges) and values
-              are dictionaries containing the 'rfreq' (relative frequency) of values
-              within each class interval. The table also includes an 'rfreqsum'
-              representing the total relative frequency of all values.
+    def display_table(self):
+        max_len = 0
 
-    Raises:
-        ValueError: If the input iterable is empty or invalid cut_points are provided.
-    """
-    if not iterable:
-        raise ValueError("Input iterable is empty")
+        for class_item in self._table:
+            max_len = max(max_len, len(str(class_item)))
 
-    if cut_points is not None and (len(cut_points) < 2 or cut_points != sorted(cut_points)):
-        raise ValueError("Invalid cut_points. It must be a list of at least two sorted values.")
+        max_len += 10
 
-    table = class_frequency_table(iterable, num_classes, cut_points)
-    table["rfreqsum"] = 0
-    for _class in table:
-        if isinstance(_class, range):
-            _class_rfreq = table[_class]["freq"] / table["freqsum"]
-            table[_class]["rfreq"] = _class_rfreq
-            table["rfreqsum"] += _class_rfreq
-    return table
+        print(f"{'Class':<{max_len}}", "Frequency")
+        for class_item in self._table:
+            print(f"{class_item:<{max_len}}", self._table[class_item])
 
 
-def cumulative_frequency_table(iterable, num_classes=None, cut_points=None):
-    """
-    Computes a cumulative frequency table for numeric values in the given iterable.
+class EqualClassLengthFrequencyTable(FrequencyTable):
+    def __init__(self, data: list[float], cut_points=None):
+        super().__init__(data)
+        self.num_classes = cut_points
 
-    Args:
-        iterable: The input iterable containing numeric values.
-        num_classes (int, optional): The number of classes to divide the data into.
-        cut_points (list of float, optional): List of cut points for defining custom
-            class intervals.
+    def _calculate_frequencies(self):
+        pass
 
-    Returns:
-        dict: A dictionary where keys are class intervals (as ranges) and values
-              are dictionaries containing the 'cfreq' (cumulative frequency) of values
-              within each class interval.
-
-    Raises:
-        ValueError: If the input iterable is empty or invalid cut_points are provided.
-    """
-    if not iterable:
-        raise ValueError("Input iterable is empty")
-
-    if cut_points is not None and (len(cut_points) < 2 or cut_points != sorted(cut_points)):
-        raise ValueError("Invalid cut_points. It must be a list of at least two sorted values.")
-
-    table = class_frequency_table(iterable, num_classes, cut_points)
-    temp = 0
-    for _class in table:
-        if isinstance(_class, range):
-            table[_class]["cfreq"] = table[_class]["freq"] + temp
-            temp = table[_class]["cfreq"]
-    return table
+    def display_table(self):
+        pass
 
 
-def jsonify(table, file_path):
-    """
-    Serialize a dictionary to JSON format and write it to a file.
+class RelativeFrequencyTable(FrequencyTable):
+    def _calculate_frequencies(self):
+        pass
 
-    Args:
-        table (dict): The dictionary to be serialized to JSON.
-        file_path (str): The path to the JSON file where the data will be written.
+    def display_table(self):
+        pass
 
-    Raises:
-        IOError: If there is an issue with writing to the file.
-    """
-    table_copy = {}
-    for key, value in table.items():
-        if isinstance(key, range):
-            key = f'{key.start}-{key.stop}'
-        table_copy[key] = value
 
-    try:
-        with open(file_path, 'w') as output:
-            json.dump(table_copy, output, indent=4)
-    except IOError as e:
-        print(f"Error writing to file: {e}")
+class CumulativeFrequencyTable(FrequencyTable):
+    def _calculate_frequencies(self):
+        pass
+
+    def display_table(self):
+        pass
