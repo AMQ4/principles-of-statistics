@@ -27,6 +27,7 @@ class InvalidSortTypeError(Exception):
     Args:
         message (str): The error message.
     """
+
     def __init__(self, message):
         super().__init__(message)
 
@@ -66,6 +67,7 @@ class FrequencyTable(ABC):
     This class defines a common interface for working with frequency data, including methods for calculating
     statistics, filtering, mapping, and more.
     """
+
     def __init__(self, data=None):
         """
         Initialize a FrequencyTable.
@@ -432,3 +434,97 @@ class FrequencyTable(ABC):
 
         return freqt
 
+
+class DiscreteFrequencyTable(FrequencyTable):
+    """
+    Subclass of FrequencyTable representing a Discrete Frequency Table for analyzing and manipulating data frequencies.
+
+    Usage:
+        You can create an instance of DiscreteFrequencyTable and use it to analyze and manipulate discrete frequency data.
+
+    Example:
+        discrete_freq_table = DiscreteFrequencyTable(data=[1, 2, 2, 3])
+    """
+
+    def __init__(self, data=None):
+        super().__init__(data)
+
+    def _calculate_frequencies(self, data: Iterable):
+        """
+        Calculate frequencies of discrete data elements.
+
+        :param data: The data to calculate frequencies for (an iterable, e.g., list, tuple).
+        :return: A frequency table (dictionary) where keys are elements and values are their frequencies.
+        """
+        if not isinstance(data, Iterable):
+            raise TypeError("Invalid data type for `data`. It must be an iterable (e.g., list, tuple).")
+
+        counter = collections.Counter(data)
+        return dict(counter.items())
+
+    def __str__(self):
+        """
+        Generate a string representation of the DiscreteFrequencyTable.
+
+        :return: A formatted string representing the frequency table.
+        """
+        max_len = 0
+
+        for class_item in self._table:
+            max_len = max(max_len, len(str(class_item)))
+
+        max_len += 7
+
+        table = ""
+        table = table + f"{'Class':<{max_len}}" + "Frequency"
+
+        for class_item in self._table:
+            table = table + f"\n{class_item:<{max_len}}" + str(self._table[class_item])
+
+        return table
+
+    def mean(self):
+        """
+        Calculate the mean (average) of the discrete data.
+
+        :return: The mean of the data.
+        :raises ValueError: If the frequency table is empty.
+        """
+        if len(self) == 0:
+            raise ValueError("Cannot calculate mean for an empty frequency table.")
+
+        sum = 0
+        for item, freq in self._table.items():
+            sum += item * freq
+
+        return sum / self.get_total()
+
+    def median(self):
+        """
+        Calculate the median of the discrete data.
+
+        :return: The median of the data.
+        :raises ValueError: If the frequency table is empty.
+        """
+        if len(self) == 0:
+            raise ValueError("Cannot calculate median for an empty frequency table.")
+
+        items = []
+        for item, freq in self._table.items():
+            items.extend([item] * freq)
+
+        items.sort()
+
+        return items[int(self.get_total() / 2)] if self.get_total() % 2 == 1 else (
+                (items[int(self.get_total() / 2)] + items[int(self.get_total() / 2) - 1]) / 2)
+
+    def mode(self):
+        """
+        Calculate the mode of the discrete data.
+
+        :return: The mode of the data.
+        :raises ValueError: If the frequency table is empty.
+        """
+        if len(self) == 0:
+            raise ValueError("Cannot calculate mode for an empty frequency table.")
+        return list(self.get_top_n_elements(1).get_data())[0]
