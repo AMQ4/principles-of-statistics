@@ -1,8 +1,10 @@
+import math
 from collections.abc import Hashable
 from enum import Enum
 from abc import ABC, abstractmethod
+from types import NoneType
 from typing import Callable, Any, Iterable
-from bisect import bisect_left
+from bisect import bisect_left, bisect_right
 from random import random
 import collections
 import heapq
@@ -87,15 +89,6 @@ class FrequencyTable(ABC):
         pass
 
     @abstractmethod
-    def __str__(self):
-        """
-        Abstract method to represent the FrequencyTable as a string.
-
-        :return: A string representation of the FrequencyTable.
-        """
-        pass
-
-    @abstractmethod
     def mean(self):
         """
         Abstract method to calculate the mean (average) of the data.
@@ -121,6 +114,27 @@ class FrequencyTable(ABC):
         :return: The mode of the data.
         """
         pass
+
+    def __str__(self):
+        """
+        Generate a string representation of the DiscreteFrequencyTable.
+
+        :return: A formatted string representing the frequency table.
+        """
+        max_len = 0
+
+        for class_item in self._table:
+            max_len = max(max_len, len(str(class_item)))
+
+        max_len += 7
+
+        table = ""
+        table = table + f"{'Class':<{max_len}}" + "Frequency"
+
+        for class_item in self._table:
+            table = table + f"\n{str(class_item):<{max_len}}" + str(self._table[class_item])
+
+        return table
 
     def __len__(self):
         """
@@ -457,31 +471,11 @@ class DiscreteFrequencyTable(FrequencyTable):
         :return: A frequency table (dictionary) where keys are elements and values are their frequencies.
         """
         if not isinstance(data, Iterable):
-            raise TypeError("Invalid data type for `data`. It must be an iterable (e.g., list, tuple).")
+            raise TypeError(f"Invalid data type for `data`. It must be an iterable (e.g., list, tuple). "
+                            f"but found {type(data)}")
 
         counter = collections.Counter(data)
         return dict(counter.items())
-
-    def __str__(self):
-        """
-        Generate a string representation of the DiscreteFrequencyTable.
-
-        :return: A formatted string representing the frequency table.
-        """
-        max_len = 0
-
-        for class_item in self._table:
-            max_len = max(max_len, len(str(class_item)))
-
-        max_len += 7
-
-        table = ""
-        table = table + f"{'Class':<{max_len}}" + "Frequency"
-
-        for class_item in self._table:
-            table = table + f"\n{class_item:<{max_len}}" + str(self._table[class_item])
-
-        return table
 
     def mean(self):
         """
@@ -528,3 +522,91 @@ class DiscreteFrequencyTable(FrequencyTable):
         if len(self) == 0:
             raise ValueError("Cannot calculate mode for an empty frequency table.")
         return list(self.get_top_n_elements(1).get_data())[0]
+
+
+class EqualClassLengthFrequencyTable(FrequencyTable):
+    def __init__(self, data=None, cut_points=None):
+        super().__init__([data if data is not None else [], cut_points])
+
+    def _calculate_frequencies(self, data):
+        if not isinstance(data, Iterable):
+            raise TypeError(f"Invalid data type for 'data'. "
+                            f"It must be an iterable (e.g., list, tuple), but found {type(data[0])}")
+        if not isinstance(data[1], Iterable) and data[1] is not None:
+            raise TypeError(f"Invalid data type for 'cut_points'. "
+                            f"It must be an iterable (e.g., list, tuple), but found {type(data[1])}")
+
+        if len(data[0]) == 0:
+            return {}
+
+        sorted_data = sorted(data[0])
+
+        cut_points = sorted(list(set(data[1]))) if data[1] is not None else None
+
+        if cut_points is None:
+            k = math.ceil(len(sorted_data) ** 0.5)
+            cut_points = EqualClassLengthFrequencyTable.equal_length_cut_points(
+                k,
+                sorted_data[0],
+                sorted_data[-1]
+            )
+        elif len(cut_points) == 0: # set default interval [min(data), max(data)] if not specified at all
+            cut_points = [min(data[0]), max(data[0]) + 1]
+
+
+        if cut_points[-1] <= sorted_data[-1]:
+            cut_points.append(sorted_data[-1] + 1)
+
+        cumfreqs = []
+        freqsum = 0
+        for cut_point in cut_points:
+            cumfreqs.append(bisect_left(sorted_data, cut_point) - freqsum)
+            freqsum += cumfreqs[-1]
+        cumfreqs.pop(0)
+
+        table = {}
+        for i in range(1, len(cut_points)):
+            table[range(cut_points[i - 1], cut_points[i])] = cumfreqs[i - 1]
+        return table
+
+    def get(self):
+        return self._table
+
+    def mean(self):
+        return 0
+
+    def median(self):
+        return 0
+
+    def mode(self):
+        return 0
+
+    def display_table(self):
+        pass
+
+    @staticmethod
+    def equal_length_cut_points(k: int, _from: float, _to: float):
+        """
+        Generate cut points for equal-length intervals within a specified range.
+
+        Args:
+            k (int): The number of intervals (classes) to create.
+            _from (float): The starting point of the range.
+            _to (float): The ending point of the range.
+
+        Returns:
+            List[float]: A list of cut points representing the boundaries of the equal-length intervals.
+
+        Raises:
+            ValueError: If k is not a positive integer.
+
+        Example:
+            equal_length_cut_points(3, 0.0, 10.0) returns [0.0, 3.334, 6.667, 10.0]
+
+        """
+        if k <= 0:
+            raise ValueError(f"Invalid number of classes. k = {k}.")
+        r = _to - _from
+        class_length = math.ceil(r / k)
+        return [_from + i * class_length for i in range(0, k)]
+
